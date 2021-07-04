@@ -20,7 +20,25 @@ import os
 import jokes
 from random import randrange
 import time
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+
+from telegram import (
+    Poll,
+    ParseMode,
+    KeyboardButton,
+    KeyboardButtonPollType,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+)
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    PollAnswerHandler,
+    PollHandler,
+    MessageHandler,
+    Filters,
+    CallbackContext,
+)
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -32,14 +50,67 @@ TOKEN = os.environ['BOT_TOKEN']
 
 # Define a few command handlers. These usually take the two arguments update and
 # context. Error handlers also receive the raised TelegramError object in error.
-def start(update, context):
-    """Send a message when the command /start is issued."""
-    update.message.reply_text('Hi!')
+def greeting(update, context):
+    """Send a message when the command /greeting is issued."""
+    update.message.reply_text('Let the battle for food BEGIN!!!')
 
 
 def help(update, context):
     """Send a message when the command /help is issued."""
-    update.message.reply_text('Help!')
+    update.message.reply_text('/greeting for greeting!')
+    update.message.reply_text('/joke for joke')
+    update.message.reply_text('/poll for poll')
+
+
+def poll(update: Update, context: CallbackContext) -> None:
+    """Sends a predefined poll"""
+    questions = ["Gumba", "Kansai", "Sumsum", "Chicken", "Company", "BBB"]
+    message = context.bot.send_poll(
+        update.effective_chat.id,
+        "where do you want to eat?",
+        questions,
+        is_anonymous=True,
+        allows_multiple_answers=False,
+    )
+    # Save some info about the poll the bot_data for later use in receive_poll_answer
+    payload = {
+        message.poll.id: {
+            "questions": questions,
+            "message_id": message.message_id,
+            "chat_id": update.effective_chat.id,
+            "answers": 0,
+        }
+    }
+    context.bot_data.update(payload)
+
+
+def receive_poll_answer(update: Update, context: CallbackContext) -> None:
+    """Summarize a users poll vote"""
+    answer = update.poll_answer
+    poll_id = answer.poll_id
+    try:
+        questions = context.bot_data[poll_id]["questions"]
+    # this means this poll answer update is from an old poll, we can't do our answering then
+    except KeyError:
+        return
+    selected_options = answer.option_ids
+    answer_string = ""
+    for question_id in selected_options:
+        if question_id != selected_options[-1]:
+            answer_string += questions[question_id] + " and "
+        else:
+            answer_string += questions[question_id]
+    context.bot.send_message(
+        context.bot_data[poll_id]["chat_id"],
+        f"{update.effective_user.mention_html()} voted for  {answer_string}!",
+        parse_mode=ParseMode.HTML,
+    )
+    context.bot_data[poll_id]["answers"] += 1
+    # Close poll after three participants voted
+    if context.bot_data[poll_id]["answers"] == 10:
+        context.bot.stop_poll(
+            context.bot_data[poll_id]["chat_id"], context.bot_data[poll_id]["message_id"]
+        )
 
 
 def joke(update, context):
@@ -71,9 +142,11 @@ def main():
     dp = updater.dispatcher
 
     # on different commands - answer in Telegram
-    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("greeting", greeting))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("joke", joke))
+    dp.add_handler(CommandHandler('poll', poll))
+    dp.add_handler(PollAnswerHandler(receive_poll_answer))
 
     # on noncommand i.e message - echo the message on Telegram
     dp.add_handler(MessageHandler(Filters.text, echo))
