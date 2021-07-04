@@ -16,7 +16,10 @@ bot.
 """
 
 import logging
-
+import os
+import jokes
+from random import randrange
+import time
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 # Enable logging
@@ -24,6 +27,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+TOKEN = os.environ['BOT_TOKEN']
 
 
 # Define a few command handlers. These usually take the two arguments update and
@@ -36,6 +40,14 @@ def start(update, context):
 def help(update, context):
     """Send a message when the command /help is issued."""
     update.message.reply_text('Help!')
+
+
+def joke(update, context):
+    """Send a joke when the command /joke is issued."""
+    joke = jokes.jokes[randrange(101)]
+    update.message.reply_text(joke["setup"])
+    time.sleep(5)
+    update.message.reply_text(joke["punchline"])
 
 
 def echo(update, context):
@@ -53,7 +65,7 @@ def main():
     # Create the Updater and pass it your bot's token.
     # Make sure to set use_context=True to use the new context based callbacks
     # Post version 12 this will no longer be necessary
-    updater = Updater("TOKEN", use_context=True)
+    updater = Updater(TOKEN, use_context=True)
 
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
@@ -61,6 +73,7 @@ def main():
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
+    dp.add_handler(CommandHandler("joke", joke))
 
     # on noncommand i.e message - echo the message on Telegram
     dp.add_handler(MessageHandler(Filters.text, echo))
